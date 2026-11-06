@@ -16,3 +16,5 @@ PRODUCT.md
 Screenshot_*
 *.jpg
 *.png
+# README용 화면은 올린다
+!docs/*.png

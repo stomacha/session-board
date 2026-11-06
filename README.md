@@ -6,6 +6,8 @@ Run many AI coding CLI sessions side by side on one board, with music and video 
 
 **Status: early prototype (0.1.0).** Built for Windows first. Expect rough edges.
 
+![Session Board: two teams with three Claude Code sessions each, Liquid Glass theme, usage rings](docs/screenshot.png)
+
 ## What it does
 
 - **Real terminals on a canvas.** Each session is the real CLI in a real terminal (node-pty + xterm.js). Group sessions into team boxes, drag, resize and zoom.
