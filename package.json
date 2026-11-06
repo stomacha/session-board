@@ -1,0 +1,16 @@
+{
+  "name": "session-board",
+  "version": "0.1.0",
+  "description": "Run many AI coding CLI sessions side by side on one board",
+  "keywords": ["claude-code", "codex", "gemini-cli", "terminal", "windows"],
+  "author": "stomacha",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.22.1"
+  },
+  "private": true
+}

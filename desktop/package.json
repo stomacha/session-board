@@ -1,0 +1,58 @@
+{
+  "name": "session-board-desktop",
+  "productName": "Session Board",
+  "version": "0.1.0",
+  "description": "Session Board desktop app: many Claude Code sessions on one board",
+  "main": "main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "dev.sessionboard.desktop",
+    "productName": "Session Board",
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "board",
+        "filter": [
+          "server.ts",
+          "index.html",
+          "glass.js",
+          "hook.mjs",
+          "statusline.mjs",
+          "package.json",
+          "glass/**"
+        ]
+      },
+      {
+        "from": "../node_modules",
+        "to": "board/node_modules"
+      },
+      {
+        "from": "C:/Program Files/nodejs/node.exe",
+        "to": "board/node/node.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Session Board"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0"
+  }
+}
