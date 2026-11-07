@@ -416,6 +416,16 @@
   .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
   #newp select, #newp input[type=text] { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; background: var(--tile); border: 1px solid var(--edge); border-radius: 8px; }
   #newp .chk { display: flex; align-items: center; gap: 8px; color: var(--ink); cursor: pointer; }
+  /* 설치 안 된 도구: 흐리게, 고르면 설치 안내를 보이고 시작 버튼을 막는다 */
+  #newp .seg label.missing { opacity: .5; }
+  #newp .toolwarn { margin: -6px 0 0; color: var(--warn); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+  #newp .toolwarn:empty { display: none; }
+  /* CLI가 하나도 없을 때 보드 위 안내 띠 */
+  .nocli { position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 30; width: min(620px, calc(100vw - 32px)); display: grid; gap: 4px; padding: 12px 16px; background: var(--panel); color: var(--ink); border: 1px solid var(--warn); border-radius: 12px; box-shadow: 0 18px 40px var(--shadow-strong); font-size: 13.5px; line-height: 1.5; }
+  .nocli[hidden] { display: none; }
+  .nocli a { color: var(--accent); }
+  .nocli code { font-size: 12.5px; }
+  .nocli .nocli-rec { color: var(--ink); }
   /* 도구: Codex·Gemini를 고르면 Claude Code 전용 항목을 숨기고 안내를 보인다 (새 세션일 때만) */
   #newp .toolhint { display: none; margin: -6px 0 0; color: var(--dim); font-size: 12px; line-height: 1.45; }
   #newp:has(input[name="mode"][value="new"]:checked):has(input[name="tool"]:not([value="claude"]):checked) .toolhint { display: block; }
@@ -520,6 +530,13 @@
     <button class="pill iconpill" id="spotbtn" type="button" aria-expanded="false" aria-controls="spot" aria-label="Spotify" title="Spotify"><svg class="spotlogo" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1ED760"/><path d="M6.2 9.4c3.9-1.2 8.6-.8 11.8 1.1M6.8 12.5c3.2-.9 7.1-.6 9.7 1M7.4 15.4c2.6-.7 5.5-.5 7.6.8" stroke="#000" stroke-width="1.7" stroke-linecap="round" fill="none"/></svg></button>
     <button class="pill iconpill" id="ytbtn" type="button" aria-expanded="false" aria-controls="ytp" aria-label="YouTube" title="YouTube"><svg class="ytlogo" width="22" height="16" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5.5" fill="#FF0000"/><path d="M11.2 5.6v8.8l7.6-4.4z" fill="#fff"/></svg></button>
   </nav>
+
+  <!-- 이 PC에 AI 코딩 CLI가 하나도 없을 때: 세션을 띄우기 전에 미리 설치를 권한다 -->
+  <div class="nocli" id="nocli" role="status" hidden>
+    <b>No AI coding CLI found on this PC.</b> Install one, then press <b>+</b> to start a session.
+    <span class="nocli-rec">Recommended: <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a> (live status, team rules, resume, phone control).</span>
+    <span>Also works with Codex (<code>npm install -g @openai/codex</code>), Gemini CLI (<code>npm install -g @google/gemini-cli</code>) and Antigravity.</span>
+  </div>
 
   <!-- YouTube: 링크를 넣으면 보드 위에 영상 블록 하나가 생긴다 -->
   <section class="spot ytp" id="ytp" aria-label="YouTube link">
@@ -724,6 +741,7 @@
       <label><input type="radio" name="tool" value="agy">Antigravity</label>
     </div>
     <p class="toolhint">Starts with its own defaults. Resume, live status, team rules and phone control are Claude Code only for now.</p>
+    <p class="toolwarn m-new" id="toolwarn" role="alert"></p>
     <label class="m-new">Name <input type="text" name="sname" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Optional, e.g. API refactor"></label>
     <label>Role in the team <input type="text" name="role" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Optional, e.g. Markdown scripts"></label>
     <label class="chk c-only"><input type="checkbox" name="rc"> Control from your phone (Remote Control)</label>
@@ -1425,6 +1443,7 @@ async function load() {
   try { d = await (await fetch("/api")).json(); }
   catch { $("email").textContent = "Can't reach the server"; $("count").textContent = "Run node server.ts in a terminal."; return; }
   data = d;
+  updateTools();
   const live = d.sessions;
   teamList = d.teams && d.teams.length ? d.teams : teamList;
   $("email").textContent = d.email;
@@ -1493,7 +1512,27 @@ form.addEventListener("beforetoggle", (e) => {
   if (ef) form.elements.effort.value = ef;
   form.elements.rc.checked = store.get("rc") === "1";
   form.elements.tool.value = ["claude", "codex", "gemini", "agy"].includes(store.get("tool")) ? store.get("tool") : "claude";
+  toolCheck();
 });
+// ---- 설치된 CLI: 서버가 30초마다 찾아 /api에 실어 준다. 미리 알려서 세션을 띄우다 실패하는 일을 막는다 ----
+function updateTools() {
+  const t = data.tools || {}, all = Object.values(t);
+  // 전부 "없음"으로 확인됐을 때만 안내 띠 (서버가 아직 찾는 중이면 installed가 비어 있음)
+  $("nocli").hidden = !(all.length && all.every((x) => x.installed === false));
+  for (const inp of form.querySelectorAll('input[name="tool"]')) {
+    const miss = t[inp.value]?.installed === false;
+    inp.closest("label").classList.toggle("missing", miss);
+    inp.closest("label").title = miss ? `${t[inp.value].label} isn't installed` : "";
+  }
+  toolCheck();
+}
+function toolCheck() {
+  const t = data.tools?.[form.elements.tool.value];
+  const miss = form.elements.mode.value === "new" && t?.installed === false;
+  $("toolwarn").textContent = miss ? `${t.label} isn't installed. Install it with ${t.install}, then try again.` : "";
+  form.querySelector(".go").disabled = miss;
+}
+form.addEventListener("change", (e) => { if (e.target.name === "tool" || e.target.name === "mode") toolCheck(); });
 // 지난 세션 목록 (이어가기)
 const ago = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 async function loadHistory() {

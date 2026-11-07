@@ -17,10 +17,10 @@ const MAX = 16; // 세션 개수는 자유지만, 컴퓨터가 버틸 수 있게
 const MODELS = ["opus", "sonnet", "haiku"];
 // 세션으로 띄울 수 있는 CLI. Codex·Gemini는 첫 판: 띄우고 쓰기만 (이어하기·상태 표시·팀 규칙·폰 조종은 Claude Code만)
 const TOOLS: Record<string, { label: string; install: string }> = {
-  claude: { label: "Claude Code", install: "https://claude.com/claude-code" },
+  claude: { label: "Claude Code", install: "the installer at https://claude.com/claude-code" },
   codex: { label: "Codex", install: "npm install -g @openai/codex" },
   gemini: { label: "Gemini CLI", install: "npm install -g @google/gemini-cli" },
-  agy: { label: "Antigravity", install: "the Antigravity CLI (agy) from Google" },
+  agy: { label: "Antigravity", install: "the Antigravity CLI (agy) installer from Google" },
 };
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
@@ -323,8 +323,23 @@ export function teamPrompt(team: Team | undefined, role: string): string {
   return lines.join("\n");
 }
 const live = new Map<string, Live>();
-// Claude Code가 없어도 서버는 켜진다 (Codex·Gemini만 쓰는 사람). Claude 세션을 띄울 때만 설치 안내
-const claudeExe = (() => { try { return execFileSync("where.exe", ["claude"], { stdio: ["ignore", "pipe", "ignore"] }).toString().split(/\r?\n/)[0].trim(); } catch { return ""; } })();
+// Claude Code가 없어도 서버는 켜진다 (Codex·Gemini만 쓰는 사람). 나중에 깔면 세션을 띄울 때 다시 찾는다
+const whereSync = (name: string) => { try { return execFileSync("where.exe", [name], { stdio: ["ignore", "pipe", "ignore"] }).toString().split(/\r?\n/)[0].trim(); } catch { return ""; } };
+let claudeExe = whereSync("claude");
+
+// 설치된 CLI: 화면이 새 세션 창과 "CLI 없음" 안내에 쓴다. 실행 중에 새로 깔 수도 있어 30초마다 다시 찾는다 (서버가 멈추지 않게 비동기)
+const whereIs = async (name: string) => { try { return (await run("where.exe", [name])).stdout.split(/\r?\n/)[0].trim(); } catch { return ""; } };
+let have: Record<string, boolean> = {}, haveAt = 0;
+async function refreshTools() {
+  haveAt = Date.now();
+  const found = await Promise.all(Object.keys(TOOLS).map(async (t) => [t, !!((await whereIs(`${t}.exe`)) || (await whereIs(`${t}.cmd`)))] as const));
+  have = Object.fromEntries(found);
+}
+function toolInfo() {   // installed: 아직 찾는 중이면 비어 있다
+  if (Date.now() - haveAt > 30_000) refreshTools();
+  return Object.fromEntries(Object.entries(TOOLS).map(([k, v]) => [k, { ...v, installed: have[k] }]));
+}
+refreshTools();
 
 function startSession(model: string, effort: string, cwd: string, name = "", team = MAIN, resumeId = "", role = "", rc = false, tool = "claude"): Live {
   let n = 1;
@@ -341,14 +356,14 @@ function startSession(model: string, effort: string, cwd: string, name = "", tea
   delete env.NO_COLOR;
   // 이 서버가 Claude Code 안에서 켜졌어도 새 세션이 그 흔적을 물려받지 않게 한다
   for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k === "CLAUDE_PID" || (k.startsWith("CLAUDE_CODE_") && k !== "CLAUDE_CODE_OAUTH_TOKEN")) delete env[k];
+  if (tool === "claude" && !claudeExe) claudeExe = whereSync("claude");   // 서버를 켠 뒤에 깔았을 수도 있다
+  if (tool === "claude" && !claudeExe) throw new Error(`Claude Code isn't installed. Install it with ${TOOLS.claude.install}.`);
   let file = claudeExe, argv = args;
-  if (tool === "claude" && !claudeExe) throw new Error(`Claude Code isn't installed. Install it from ${TOOLS.claude.install}, then restart Session Board.`);
   if (tool !== "claude") {
     // .exe(agy 등)는 바로 띄우고, npm으로 깐 CLI(.cmd)는 cmd로 감싸 띄운다 (node-pty는 .cmd를 바로 못 띄움)
-    const find = (name: string) => { try { return execFileSync("where.exe", [name], { stdio: ["ignore", "pipe", "ignore"] }).toString().split(/\r?\n/)[0].trim(); } catch { return ""; } };
-    const exe = find(`${tool}.exe`);
+    const exe = whereSync(`${tool}.exe`);
     if (exe) argv = [];
-    else if (find(`${tool}.cmd`)) argv = ["/d", "/c", `${tool}.cmd`];
+    else if (whereSync(`${tool}.cmd`)) argv = ["/d", "/c", `${tool}.cmd`];
     else throw new Error(`${TOOLS[tool].label} isn't installed. Install it with: ${TOOLS[tool].install}`);
     file = exe || "cmd.exe";
   }
@@ -398,7 +413,7 @@ const server = createServer(async (req, res) => {
       id: s.id, n: s.n, name: s.name, team: teamOk(s.team) ? s.team : MAIN, role: s.role, tool: s.tool, model: s.model || "default", effort: s.effort, cwd: s.cwd, start: s.start, exited: s.exited, tokens: tokensOf(s.id),
       state: s.exited ? "ended" : sessionState(s.id),
     }));
-    return json(res, 200, { email: email(), max: MAX, home: homedir(), defaultCwd: homedir(), limits: limits(), teams, sessions });
+    return json(res, 200, { email: email(), max: MAX, home: homedir(), defaultCwd: homedir(), limits: limits(), teams, sessions, tools: toolInfo() });
   }
   if (req.method === "POST" && url.pathname === "/api/new") {
     if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
