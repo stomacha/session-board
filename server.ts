@@ -323,7 +323,8 @@ export function teamPrompt(team: Team | undefined, role: string): string {
   return lines.join("\n");
 }
 const live = new Map<string, Live>();
-const claudeExe = execFileSync("where.exe", ["claude"]).toString().split(/\r?\n/)[0].trim();
+// Claude Code가 없어도 서버는 켜진다 (Codex·Gemini만 쓰는 사람). Claude 세션을 띄울 때만 설치 안내
+const claudeExe = (() => { try { return execFileSync("where.exe", ["claude"], { stdio: ["ignore", "pipe", "ignore"] }).toString().split(/\r?\n/)[0].trim(); } catch { return ""; } })();
 
 function startSession(model: string, effort: string, cwd: string, name = "", team = MAIN, resumeId = "", role = "", rc = false, tool = "claude"): Live {
   let n = 1;
@@ -341,6 +342,7 @@ function startSession(model: string, effort: string, cwd: string, name = "", tea
   // 이 서버가 Claude Code 안에서 켜졌어도 새 세션이 그 흔적을 물려받지 않게 한다
   for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k === "CLAUDE_PID" || (k.startsWith("CLAUDE_CODE_") && k !== "CLAUDE_CODE_OAUTH_TOKEN")) delete env[k];
   let file = claudeExe, argv = args;
+  if (tool === "claude" && !claudeExe) throw new Error(`Claude Code isn't installed. Install it from ${TOOLS.claude.install}, then restart Session Board.`);
   if (tool !== "claude") {
     // .exe(agy 등)는 바로 띄우고, npm으로 깐 CLI(.cmd)는 cmd로 감싸 띄운다 (node-pty는 .cmd를 바로 못 띄움)
     const find = (name: string) => { try { return execFileSync("where.exe", [name], { stdio: ["ignore", "pipe", "ignore"] }).toString().split(/\r?\n/)[0].trim(); } catch { return ""; } };
