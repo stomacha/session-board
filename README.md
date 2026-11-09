@@ -40,7 +40,7 @@ npm install
 start.bat
 ```
 
-`start.bat` starts the server on `127.0.0.1:4777` and opens it in an Edge app window.
+`start.bat` starts the server on `127.0.0.1:4777` in the background, with no window to close by accident, and opens the board in an Edge app window. `stop.bat` stops the server and every session it started. Server output goes to `server.log`.
 
 ## Build the Windows app
 

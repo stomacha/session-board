@@ -6,6 +6,8 @@ dist/
 # 개인 데이터: 팀 설정, 도구 캐시
 teams.json
 teams.json.tmp
+presets.json
+presets.json.tmp
 .impeccable/
 
 # 공개하지 않는 작업 자료: 디자인 비교, 다른 도구의 결과물, 스크린샷, 내부 메모
@@ -18,3 +20,4 @@ Screenshot_*
 *.png
 # README용 화면은 올린다
 !docs/*.png
+server.log

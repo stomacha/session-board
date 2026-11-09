@@ -266,6 +266,10 @@
   #teamf legend { font-size: 12.5px; color: var(--dim); padding: 0 0 8px; }
   .hint { margin: 0; font-size: 13px; line-height: 1.55; color: var(--dim); }
   .picks { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+  .picks .prow { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; border: 1px solid var(--edge); border-radius: 8px; font-size: 13.5px; }
+  .picks .prow small { margin-left: auto; font-size: 12px; color: var(--dim); }
+  .twait { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .twait:empty { display: none; }
   .picks label { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 8px; font-size: 13.5px; cursor: pointer; }
   .picks label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .picks input { accent-color: var(--accent); }
@@ -283,6 +287,20 @@
   .zoomlabel:hover { color: var(--ink); border-color: var(--accent-edge); }
   :root[data-theme="liquid-glass"] .zoomlabel { right: 74px; bottom: 26px; -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%); background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .03)), rgba(40, 40, 44, .45); border-color: rgba(255, 255, 255, .16); color: var(--ink); }
   @media (max-width: 960px) { #world { display: contents; transform: none !important; } .zoomlabel { display: none; } }
+  /* 격자 보기: 보드를 줄이지 않고 세션 칸을 화면에 꽉 채운다. 글자는 실제 크기 그대로 */
+  .gridbtn { right: 130px; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; }
+  :root[data-theme="liquid-glass"] .gridbtn { right: 140px; }
+  .gridbtn[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); border-color: transparent; }
+  #grid { position: fixed; top: 68px; left: 16px; right: 16px; bottom: 84px; z-index: 30; display: grid; gap: 8px;
+    grid-template-columns: repeat(var(--gc, 3), minmax(0, 1fr)); grid-template-rows: repeat(var(--gr, 3), minmax(0, 1fr)); }
+  #grid[hidden] { display: none; }
+  :root.gridmode #world, :root.gridmode #usage, :root.gridmode #zoomlabel { display: none; }
+  :root.gridmode .gridbtn { right: 64px; }
+  :root.gridmode[data-theme="liquid-glass"] .gridbtn { right: 74px; }
+  #grid .win { min-height: 0; background: var(--term-bg); }
+  #grid .term { flex: 1; height: auto; min-height: 0; }
+  #grid .win.peek { outline: 2px solid var(--accent-edge); outline-offset: -2px; }
+  @media (max-width: 960px) { .gridbtn { display: none; } }
   /* 설정 창: 화면 가운데, 16:9, 화면 폭의 절반. 뒤는 흐리게 */
   #setd, #teamd { padding: 0; border: 0; background: none; color: var(--ink); max-width: none; max-height: none; overflow: visible; }
   #setd::backdrop, #teamd::backdrop { background: rgba(0, 0, 0, .38); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -418,6 +436,8 @@
   #newp .chk { display: flex; align-items: center; gap: 8px; color: var(--ink); cursor: pointer; }
   /* 설치 안 된 도구: 흐리게, 고르면 설치 안내를 보이고 시작 버튼을 막는다 */
   #newp .seg label.missing { opacity: .5; }
+  #newp #efforts { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  #newp #efforts label { padding: 8px 2px; }
   #newp .toolwarn { margin: -6px 0 0; color: var(--warn); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
   #newp .toolwarn:empty { display: none; }
   /* CLI가 하나도 없을 때 보드 위 안내 띠 */
@@ -434,15 +454,36 @@
   #newp .go:disabled { opacity: .5; cursor: wait; }
   .err { margin: 0; font-size: 12.5px; color: var(--warn); }
   /* 커밋 결과 알림, 키 발견 창 */
-  .toast { position: fixed; left: 50%; bottom: 24px; translate: -50% 12px; z-index: 60; max-width: min(560px, 90vw); padding: 10px 16px; border-radius: 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--edge); box-shadow: 0 14px 34px var(--shadow-strong); font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .16s, translate .16s; }
+  #hof label { display: block; margin: 0 0 -6px; font-size: 13px; color: var(--dim); }
+  #hoto { width: 100%; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--edge); background: var(--tile); color: var(--ink); font: inherit; }
+  #lof label { display: block; margin: 0 0 -6px; font-size: 13px; color: var(--dim); }
+  #lof select, #lof input { width: 100%; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--edge); background: var(--tile); color: var(--ink); font: inherit; }
+  #lolist { display: grid; gap: 6px; margin-top: 10px; }
+  .loitem { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--edge); font-size: 13px; }
+  .loitem button { font: inherit; font-size: 12.5px; min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--edge); background: transparent; color: var(--ink); cursor: pointer; }
+  .lp { color: var(--accent); }
+  .cmdbar { position: fixed; left: 50%; bottom: 18px; translate: -50% 0; z-index: 45; width: min(680px, calc(100vw - 32px)); display: grid; gap: 6px; padding: 6px; border-radius: 18px; background: var(--panel); border: 1px solid var(--edge); box-shadow: 0 14px 34px var(--shadow-strong); }
+  :root[data-theme="liquid-glass"] .cmdbar { -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%); background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .03)), rgba(40, 40, 44, .45); border-color: rgba(255, 255, 255, .16); }
+  .cmdbar .targets { display: none; flex-wrap: wrap; gap: 6px; max-height: 76px; overflow-y: auto; padding: 4px 4px 0; }
+  .cmdbar:focus-within .targets, .cmdbar.picked .targets { display: flex; }
+  .tchip { font: inherit; font-size: 12.5px; min-height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; color: var(--dim); cursor: pointer; white-space: nowrap; }
+  .tchip:hover { color: var(--ink); border-color: var(--accent-edge); }
+  .tchip.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+  .cmdrow { display: flex; gap: 6px; align-items: flex-end; }
+  #cmd { flex: 1; min-width: 0; resize: none; min-height: 40px; max-height: 128px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; line-height: 1.45; padding: 10px 10px; outline: none; }
+  #cmd::placeholder { color: var(--dim); }
+  #cmdgo { min-height: 40px; padding: 0 16px; border-radius: 12px; border: 0; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; }
+  #cmdgo:active { scale: .97; }
+  @media (max-width: 960px) { .cmdbar { bottom: 10px; } }
+  .toast { position: fixed; left: 50%; bottom: 96px; translate: -50% 12px; z-index: 60; max-width: min(560px, 90vw); padding: 10px 16px; border-radius: 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--edge); box-shadow: 0 14px 34px var(--shadow-strong); font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .16s, translate .16s; }
   .toast.show { opacity: 1; translate: -50% 0; }
   .toast.bad { border-color: var(--warn); }
-  #commitd, #rulesd { padding: 0; border: 0; background: none; color: var(--ink); max-width: none; }
-  :is(#commitd, #rulesd)::backdrop { background: rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  #rulesf { width: min(560px, 92vw); display: grid; gap: 14px; padding: 22px 26px; background: var(--panel); border: 1px solid var(--accent-edge); border-radius: 16px; box-shadow: 0 20px 44px var(--shadow-strong); }
-  #rulesf h2 { margin: 0; font-size: 18px; }
-  #rulesf textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--tile); color: var(--ink); font: 14px/1.5 inherit; resize: vertical; }
-  #rulesf .go { padding: 9px 22px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 700; cursor: pointer; }
+  #commitd, #rulesd, #hod, #lod { padding: 0; border: 0; background: none; color: var(--ink); max-width: none; }
+  :is(#commitd, #rulesd, #hod, #lod)::backdrop { background: rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  :is(#rulesf, #hof, #lof) { width: min(560px, 92vw); display: grid; gap: 14px; padding: 22px 26px; background: var(--panel); border: 1px solid var(--accent-edge); border-radius: 16px; box-shadow: 0 20px 44px var(--shadow-strong); }
+  :is(#rulesf, #hof, #lof) h2 { margin: 0; font-size: 18px; }
+  :is(#rulesf, #hof, #lof) textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--tile); color: var(--ink); font: 14px/1.5 inherit; resize: vertical; }
+  :is(#rulesf, #hof, #lof) .go { padding: 9px 22px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 700; cursor: pointer; }
   #commitf { width: min(640px, 92vw); display: grid; gap: 14px; padding: 22px 26px; background: var(--panel); border: 1px solid var(--warn); border-radius: 16px; box-shadow: 0 20px 44px var(--shadow-strong); }
   #commitf h2 { margin: 0; font-size: 18px; }
   .finds { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
@@ -585,6 +626,8 @@
   </div>
 
   <!-- 종합 설정: 화면 오른쪽 아래 구석 -->
+  <div id="grid" hidden></div>
+  <button class="zoomlabel gridbtn" id="gridbtn" type="button" aria-pressed="false" title="Grid view: every session full size (Ctrl+G). Space over a session opens it large.">Grid</button>
   <button class="zoomlabel" id="zoomlabel" type="button" title="Reset zoom" aria-label="Zoom 100%, reset">100%</button>
   <button class="gear" id="gear" type="button" aria-haspopup="dialog" aria-label="Setting" title="Setting">
     <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><circle cx="10.5" cy="4.5" r="1.8" fill="var(--panel)" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="8" r="1.8" fill="var(--panel)" stroke="currentColor" stroke-width="1.5"/><circle cx="9.5" cy="11.5" r="1.8" fill="var(--panel)" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -671,6 +714,10 @@
         <legend>Move running sessions into this team</legend>
         <div class="picks" id="tpicks"></div>
       </fieldset>
+      <fieldset id="tpresets" hidden>
+        <legend>Or start a saved preset</legend>
+        <div class="picks" id="plist"></div>
+      </fieldset>
     </div>
     <footer class="sheetfoot">
       <p class="err" id="terr" role="alert"></p>
@@ -694,7 +741,53 @@
   </form>
   </dialog>
 
+  <dialog id="hod" aria-labelledby="ho-title">
+  <form id="hof">
+    <h2 id="ho-title">Hand off this work</h2>
+    <p class="hint">The session writes a handoff brief (goal, what's done, what's left, next steps) into a .cerebro folder in its project. When the brief is ready, the receiving session reads it and carries on.</p>
+    <label for="hoto">Who takes over</label>
+    <select id="hoto" name="to"></select>
+    <label for="honote">Extra instruction for the next session (optional)</label>
+    <textarea id="honote" name="note" rows="3" maxlength="1000" placeholder="e.g. Focus on the tests first."></textarea>
+    <footer class="sheetfoot">
+      <p class="err" id="hoerr" role="alert"></p>
+      <button type="button" class="reset" id="hocancel">Cancel</button>
+      <button class="go" type="submit">Hand off</button>
+    </footer>
+  </form>
+  </dialog>
+
+  <dialog id="lod" aria-labelledby="lo-title">
+  <form id="lof">
+    <h2 id="lo-title">Loop this session</h2>
+    <p class="hint">Sends a message again and again, so the session keeps working without you. It stops when the stop text shows up, or after the number of runs you set.</p>
+    <div id="lolist"></div>
+    <label for="lowhen">Send the message</label>
+    <select id="lowhen" name="when"><option value="idle">Each time the session finishes and goes quiet</option><option value="every">Every few minutes</option><option value="match">When some text shows up in the session</option></select>
+    <div id="loevery"><label for="lomin">Minutes between runs</label><input id="lomin" name="every" type="number" min="1" max="1440" value="30"></div>
+    <div id="lomatch" hidden><label for="lowatch">Text to watch for</label><input id="lowatch" name="match" maxlength="200" placeholder="e.g. usage limit reached"></div>
+    <label for="lotext">Message to send</label>
+    <textarea id="lotext" name="text" rows="2" maxlength="8000">Continue with the next step.</textarea>
+    <label for="lountil">Stop when this text shows up (optional)</label>
+    <input id="lountil" name="until" maxlength="200" placeholder="e.g. ALL TESTS PASS">
+    <label for="lomax">Stop after this many runs</label>
+    <input id="lomax" name="max" type="number" min="1" max="100" value="10">
+    <footer class="sheetfoot">
+      <p class="err" id="loerr" role="alert"></p>
+      <button type="button" class="reset" id="locancel">Close</button>
+      <button class="go" type="submit">Start loop</button>
+    </footer>
+  </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <form class="cmdbar" id="cmdbar" autocomplete="off" aria-label="Tell several sessions at once">
+    <div class="targets" id="targets" role="group" aria-label="Send to"></div>
+    <div class="cmdrow">
+      <textarea id="cmd" rows="1" placeholder="Pick above, or @3 @team @all · Ctrl+K · Win+H to speak · Alt+J: who needs you" aria-label="Message to send"></textarea>
+      <button type="submit" id="cmdgo">Send</button>
+    </div>
+  </form>
   <dialog id="commitd" aria-labelledby="commit-title">
     <form id="commitf" method="dialog">
       <h2 id="commit-title">API keys found in this repository</h2>
@@ -740,25 +833,15 @@
       <label><input type="radio" name="tool" value="gemini">Gemini</label>
       <label><input type="radio" name="tool" value="agy">Antigravity</label>
     </div>
-    <p class="toolhint">Starts with its own defaults. Resume, live status, team rules and phone control are Claude Code only for now.</p>
+    <p class="toolhint">Resume, live status, team rules and phone control are Claude Code only for now.</p>
     <p class="toolwarn m-new" id="toolwarn" role="alert"></p>
     <label class="m-new">Name <input type="text" name="sname" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Optional, e.g. API refactor"></label>
     <label>Role in the team <input type="text" name="role" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Optional, e.g. Markdown scripts"></label>
     <label class="chk c-only"><input type="checkbox" name="rc"> Control from your phone (Remote Control)</label>
-    <label class="c-only">Model
-      <select name="model">
-        <option value="">Default</option><option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option>
-      </select>
-    </label>
-    <fieldset class="c-only">
+    <label>Model <select name="model" id="models"></select></label>
+    <fieldset id="effortf">
       <legend>Reasoning effort</legend>
-      <div class="seg">
-        <label><input type="radio" name="effort" value="low">Low</label>
-        <label><input type="radio" name="effort" value="medium">Med</label>
-        <label><input type="radio" name="effort" value="high" checked>High</label>
-        <label><input type="radio" name="effort" value="xhigh">XHigh</label>
-        <label><input type="radio" name="effort" value="max">Max</label>
-      </div>
+      <div class="seg" id="efforts"></div>
     </fieldset>
     <label class="m-new">Folder <input type="text" name="cwd" required spellcheck="false" autocomplete="off"></label>
     <p class="err" id="err" role="alert"></p>
@@ -778,10 +861,13 @@ const narrow = matchMedia("(max-width: 960px)");
 
 const MASCOT = '<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true" style="fill:var(--signal)"><rect x="2" y="0" width="12" height="8"/><rect x="0" y="3" width="2" height="3"/><rect x="14" y="3" width="2" height="3"/><rect x="3" y="8" width="2" height="4"/><rect x="7" y="8" width="2" height="4"/><rect x="11" y="8" width="2" height="4"/></svg>';
 const ICON = {
+  loop: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M11.5 5.2A4.8 4.8 0 0 0 2.6 4.4M2.5 8.8a4.8 4.8 0 0 0 8.9.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M11.8 1.9v3.5H8.3M2.2 12.1V8.6h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+  handoff: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 7h9M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M12.5 2.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   big: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.5 1.5h4v4M5.5 12.5h-4v-4M12.5 1.5 8 6M1.5 12.5 6 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>',
   plus: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>',
   commit: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="2.6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M1 7h3.4M9.6 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   pen: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9.2 2.3l2.5 2.5-6.9 6.9-3 .5.5-3z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/></svg>',
+  save: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 1.8h7v10.4L7 9.6l-3.5 2.6z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 3.8h9M5.5 3.8V2.5h3v1.3M3.7 3.8l.6 7.7h5.4l.6-7.7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   close: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="m3 3 8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>',
   rules: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 3.5h7M5 7h7M5 10.5h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="2.2" cy="3.5" r="1" fill="currentColor"/><circle cx="2.2" cy="7" r="1" fill="currentColor"/><circle cx="2.2" cy="10.5" r="1" fill="currentColor"/></svg>',
@@ -856,7 +942,7 @@ function zoomAt(sx, sy, f) {
   const cv = $("canvas");
   const isBackground = (t) => t === cv || t.id === "world";
   addEventListener("wheel", (e) => {
-    if (narrow.matches || $("setd").open || $("teamd").open || $("termd").open) return;
+    if (gridOn || narrow.matches || $("setd").open || $("teamd").open || $("termd").open) return;
     const scrolls = e.target.closest?.(".term, #newp, .spot, .hist");
     if (scrolls && !e.ctrlKey) return;          // 터미널 글자 위와 목록 창 안에서는 원래대로 스크롤
     e.preventDefault();
@@ -881,7 +967,7 @@ function zoomAt(sx, sy, f) {
   });
   // 키보드: Ctrl + = / - / 0 (터미널에 입력 중일 때는 건드리지 않는다)
   addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || narrow.matches || e.target.closest?.(".term, input, select, textarea")) return;
+    if (gridOn || !(e.ctrlKey || e.metaKey) || narrow.matches || e.target.closest?.(".term, input, select, textarea")) return;
     const c = { x: innerWidth / 2, y: innerHeight / 2 };
     if (e.key === "=" || e.key === "+") { e.preventDefault(); zoomAt(c.x, c.y, 1.15); }
     if (e.key === "-") { e.preventDefault(); zoomAt(c.x, c.y, 1 / 1.15); }
@@ -958,8 +1044,9 @@ function teamBox(t) {
   el.className = "running team";
   el.dataset.team = t.id;
   el.setAttribute("aria-label", t.id === "main" ? "Sessions" : `Sessions of team ${t.name}`);
-  el.innerHTML = `<h2 class="handle"><i class="dot"></i><span>Sessions</span><span class="tcount"></span><span class="twait"></span>` +
-    `<button class="ib" type="button" data-tact="rules" aria-label="Team rules" title="Team rules">${ICON.rules}</button></h2>` +
+  el.innerHTML = `<h2 class="handle"><i class="dot"></i><span>Sessions</span><span class="tcount"></span><button type="button" class="twait" title="Open the session waiting for you (Alt+J)"></button>` +
+    `<button class="ib" type="button" data-tact="rules" aria-label="Team rules" title="Team rules">${ICON.rules}</button>` +
+    `<button class="ib" type="button" data-tact="preset" aria-label="Save this team as a preset" title="Save as preset: start this same team again in one go from New team">${ICON.save}</button></h2>` +
     `<div class="scroll"><div class="tiles"></div><p class="empty">No sessions yet. Press + to start one.</p></div>${RZ}`;
   $("world").appendChild(el);
   placeGeo(el, t.id, fallback ? { x: 454, y: fallback.y } : null);
@@ -1006,7 +1093,13 @@ $("world").addEventListener("click", async (e) => {
   }
   if (btn.dataset.tact === "rename") inlineEdit(b.acctName, b.name, "Team name", (name) => (name ? api("PATCH", "/api/team", { id, name }) : null));
   if (btn.dataset.tact === "delete") { try { await api("DELETE", `/api/team?id=${encodeURIComponent(id)}`); } catch {} await load(); }
+  if (btn.dataset.tact === "preset") {
+    try { const r = await api("POST", "/api/preset", { team: id }); toast(`Saved preset "${b.name}" with ${r.count} ${r.count === 1 ? "session" : "sessions"}. Start it again from New team.`, false, 5000); await load(); }
+    catch (err) { toast(`Couldn't save the preset: ${err.message}`, true); }
+  }
 });
+// 팀 머리줄의 "N waiting"을 누르면 그 팀에서 나를 기다리는 세션을 크게 연다
+$("world").addEventListener("click", (e) => { const w = e.target.closest(".twait"); if (w?.textContent) jumpWaiting(w.closest("[data-team]").dataset.team); });
 $("world").addEventListener("dblclick", (e) => {
   const n = e.target.closest(".teamacct .tname");
   if (n) n.closest(".teamacct").querySelector('[data-tact="rename"]').click();
@@ -1087,7 +1180,28 @@ $("world").addEventListener("pointerdown", (e) => {
     $("tpicks").innerHTML = list.length
       ? list.map((s) => `<label><input type="checkbox" name="tpick" value="${s.id}"><span>${esc(s.name || `Session ${s.n}`)}</span><small>${esc(teamName(s.team))}</small></label>`).join("")
       : '<p class="none">No sessions are running. You can start sessions in this team after you create it.</p>';
+    renderPresets();
     d.showModal(); f.elements.tname.focus();
+  });
+  // 저장한 프리셋: Start면 같은 이름의 팀과 세션들이 한 번에 뜬다
+  const renderPresets = () => {
+    const ps = data.presets || [];
+    $("tpresets").hidden = !ps.length;
+    $("plist").innerHTML = ps.map((p) => `<div class="prow"><span>${esc(p.name)}</span><small>${p.count} ${p.count === 1 ? "session" : "sessions"}</small>` +
+      `<button type="button" class="reset" data-launch="${esc(p.id)}">Start</button>` +
+      `<button type="button" class="ib" data-pdel="${esc(p.id)}" aria-label="Delete preset ${esc(p.name)}" title="Delete preset">${ICON.trash}</button></div>`).join("");
+  };
+  $("plist").addEventListener("click", async (e) => {
+    const go = e.target.closest("[data-launch]"), del = e.target.closest("[data-pdel]");
+    if (del) { try { await api("DELETE", `/api/preset?id=${encodeURIComponent(del.dataset.pdel)}`); } catch {} await load(); renderPresets(); return; }
+    if (!go) return;
+    go.disabled = true;
+    try {
+      const r = await api("POST", "/api/preset/launch", { id: go.dataset.launch });
+      close(); await load();
+      toast(`Started ${r.started} ${r.started === 1 ? "session" : "sessions"} in "${teamName(r.team)}".` + (r.skipped.length ? ` Skipped: ${r.skipped.join("; ")}.` : ""), r.skipped.length > 0, 7000);
+    } catch (err) { $("terr").textContent = err.message; }
+    go.disabled = false;
   });
   const close = () => d.close();
   $("teamclose").addEventListener("click", close);
@@ -1358,18 +1472,62 @@ let termFont = [12, 14, 16].includes(+store.get("tsize")) ? +store.get("tsize") 
   });
 })();
 
+// ---- 격자 보기: 세션 칸을 화면에 꽉 채운다 (보드 축소 대신). 켜 둔 상태는 이 브라우저에 기억 ----
+let gridOn = store.get("grid") === "1";
+// 칸 너비와 (높이 × 1.8) 중 작은 쪽이 가장 커지는 열 수: 터미널은 가로로 긴 게 읽기 좋다
+function gridCols(n, W, H) {
+  let best = 1, score = 0;
+  for (let c = 1; c <= n; c++) { const s = Math.min(W / c, (H / Math.ceil(n / c)) * 1.8); if (s > score) { score = s; best = c; } }
+  return best;
+}
+function placeGrid() {
+  const g = $("grid"), ts = [...tiles.values()].filter((t) => !t.focused).sort((a, b) => a.n - b.n);
+  const c = gridCols(Math.max(1, ts.length), g.clientWidth || innerWidth, g.clientHeight || innerHeight);
+  g.style.setProperty("--gc", c); g.style.setProperty("--gr", Math.max(1, Math.ceil(ts.length / c)));
+  if ([...g.children].map((e) => e.dataset.sid).join() !== ts.map((t) => t.id).join()) for (const t of ts) { t.el.dataset.sid = t.id; g.appendChild(t.el); }
+}
+function setGrid(on) {
+  gridOn = on; store.set("grid", on ? "1" : "0");
+  document.documentElement.classList.toggle("gridmode", on);
+  $("grid").hidden = !on;
+  $("gridbtn").setAttribute("aria-pressed", String(on));
+  $("gridbtn").textContent = on ? "Board" : "Grid";
+  if (on) placeGrid();
+  else for (const t of tiles.values()) if (!t.focused) (boxes.get(t.team) || boxes.get("main")).tiles.appendChild(t.el);
+  if (!on) load();   // 팀 안 순서를 다시 맞춘다
+  queueWire();
+}
+$("gridbtn").addEventListener("click", () => setGrid(!gridOn));
+if (gridOn) setGrid(true);
+addEventListener("resize", () => { if (gridOn) placeGrid(); });
+// Space: 마우스가 올라간 칸을 잠깐 크게, 다시 Space면 돌아간다. 터미널·입력칸에 글을 쓰는 중이면 그대로 둔다
+let hoverTile = null;
+addEventListener("pointerover", (e) => {
+  const el = e.target.closest?.(".win");
+  if (hoverTile) hoverTile.el.classList.remove("peek");
+  hoverTile = el ? [...tiles.values()].find((t) => t.el === el) || null : null;
+  if (hoverTile && gridOn) hoverTile.el.classList.add("peek");
+});
+addEventListener("keydown", (e) => {
+  if (e.target.closest?.(".term, input, select, textarea, [contenteditable]") || e.isComposing) return;
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "g") { e.preventDefault(); setGrid(!gridOn); return; }
+  if (e.key !== " " || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (termd.open) { if (large?.peek) { e.preventDefault(); termd.close(); } return; }
+  if (hoverTile && tiles.has(hoverTile.id)) { e.preventDefault(); openLarge(hoverTile, true); }
+});
+
 // ---- 세션 크게 보기: 창을 보드에서 떼어 가운데 크게 띄운다. 닫으면 제자리로 ----
 // Esc는 Claude Code에 필요한 키라서 이 창을 닫지 않는다. 닫기는 버튼, 바깥 클릭.
 const termd = $("termd");
 let large = null;
-function openLarge(t) {
+function openLarge(t, peek = false) {
   if (termd.open) return;
-  large = t; t.focused = true;
+  large = t; t.focused = true; t.peek = peek;
   $("termbox").appendChild(t.el);
   t.bigBtn.setAttribute("aria-label", "Back to the board"); t.bigBtn.title = "Back to the board";
   t.term.options.fontSize = Math.max(termFont + 3, 15);
   termd.showModal();
-  requestAnimationFrame(() => { t.doFit(); t.term.focus(); });
+  requestAnimationFrame(() => { t.doFit(); if (!peek) t.term.focus(); });
 }
 termd.addEventListener("cancel", (e) => e.preventDefault());
 termd.addEventListener("click", (e) => { if (e.target === termd) termd.close(); });
@@ -1380,7 +1538,7 @@ termd.addEventListener("close", () => {
   t.focused = false;
   t.bigBtn.setAttribute("aria-label", "Open large"); t.bigBtn.title = "Open large";
   t.term.options.fontSize = termFont;
-  if (tiles.has(t.id)) (boxes.get(t.team) || boxes.get("main")).tiles.appendChild(t.el); else t.el.remove();
+  if (!tiles.has(t.id)) t.el.remove(); else if (gridOn) placeGrid(); else (boxes.get(t.team) || boxes.get("main")).tiles.appendChild(t.el);
   requestAnimationFrame(() => t.doFit());
   load();
 });
@@ -1395,8 +1553,10 @@ function makeTile(s) {
   el.innerHTML = `<div class="bar">${other ? "" : MASCOT}<b class="sname"></b>` +
     `<button class="ib" data-act="rename" aria-label="Rename session ${s.n}" title="Rename">${ICON.pen}</button>` +
     (s.role ? `<span class="role" title="Role in the team">${esc(s.role)}</span>` : "") +
-    `<small>${other ? esc({ codex: "Codex", gemini: "Gemini CLI", agy: "Antigravity" }[s.tool] ?? s.tool) : `${esc(s.model)}, ${esc(s.effort)}`}</small>` +
+    `<small>${esc([other && ({ codex: "Codex", gemini: "Gemini CLI", agy: "Antigravity" }[s.tool] ?? s.tool), data.tools?.[s.tool]?.models?.find(([id]) => id === s.model)?.[1] ?? s.model, s.effort || (other ? "" : "default")].filter(Boolean).join(", "))}</small>` +
     `<select class="tsel" aria-label="Move session ${s.n} to team" title="Team"></select>` +
+    `<button class="ib" data-act="loop" aria-label="Loop session ${s.n}" title="Loop: keep it working">${ICON.loop}</button>` +
+    `<button class="ib" data-act="handoff" aria-label="Hand off session ${s.n}" title="Hand off to another session">${ICON.handoff}</button>` +
     `<button class="ib" data-act="commit" aria-label="Commit this folder" title="Commit (checks for API keys first)">${ICON.commit}</button>` +
     `<button class="ib" data-act="big" aria-label="Open large" title="Open large">${ICON.big}</button>` +
     `<button class="ib" data-act="close" aria-label="Close session ${s.n}" title="Close">${ICON.close}</button></div>` +
@@ -1426,6 +1586,8 @@ function makeTile(s) {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "big") { if (t.focused) termd.close(); else openLarge(t); }
     if (act === "commit") commit(s.id, e.target.closest("[data-act]"));
+    if (act === "handoff") openHandoff(s.id);
+    if (act === "loop") openLoop(s.id);
     if (act === "close") { await fetch(`/api/session?id=${s.id}`, { method: "DELETE" }); await load(); }
     if (act === "rename") inlineEdit(t.nameEl, t.name, `Session ${s.n}`, (name) => api("PATCH", "/api/session", { id: s.id, name }));
   });
@@ -1438,6 +1600,152 @@ function makeTile(s) {
   return t;
 }
 
+// ---- 한 번에 여러 세션에 지시: 칩으로 고르거나 글 안에 @3, @팀이름, @all ----
+const picked = new Set();
+let targetKey = "";
+const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, "");
+const liveSessions = () => (data.sessions || []).filter((s) => !s.exited);
+function renderTargets(force) {
+  const ss = liveSessions();
+  for (const id of [...picked]) if (!ss.some((s) => s.id === id)) picked.delete(id);
+  const key = JSON.stringify([ss.map((s) => [s.id, s.n, s.name, s.team]), [...picked], teamList.map((t) => t.name)]);
+  if (!force && key === targetKey) return;
+  targetKey = key;
+  const chip = (k, label, on) => `<button type="button" class="tchip${on ? " on" : ""}" data-key="${esc(k)}" aria-pressed="${on}">${esc(label)}</button>`;
+  const teams = [...new Set(ss.map((s) => s.team))];
+  const all = ss.length > 0 && ss.every((s) => picked.has(s.id));
+  $("targets").innerHTML = chip("all", `All ${ss.length}`, all)
+    + (teams.length > 1 ? teams.map((t) => { const m = ss.filter((s) => s.team === t); return chip("team:" + t, teamName(t), m.every((s) => picked.has(s.id))); }).join("") : "")
+    + ss.map((s) => chip("s:" + s.id, `${s.n} · ${s.name || "Session " + s.n}`, picked.has(s.id))).join("");
+  $("cmdbar").classList.toggle("picked", picked.size > 0);
+}
+$("targets").addEventListener("click", (e) => {
+  const b = e.target.closest(".tchip"); if (!b) return;
+  const ss = liveSessions(), k = b.dataset.key;
+  const group = k === "all" ? ss : k.startsWith("team:") ? ss.filter((s) => s.team === k.slice(5)) : ss.filter((s) => s.id === k.slice(2));
+  const allOn = group.every((s) => picked.has(s.id));
+  group.forEach((s) => allOn ? picked.delete(s.id) : picked.add(s.id));
+  renderTargets(true);
+});
+// @3 = 3번 세션, @all, @팀이름, @세션이름 (띄어쓰기 없이). 못 찾은 @는 글에 그대로 남긴다 (이메일, 데코레이터 등)
+function resolveTargets(text) {
+  const ss = liveSessions(), ids = new Set(picked);
+  const body = text.replace(/(^|\s)@([^\s@]+)/g, (m, sp, tok) => {
+    const k = norm(tok);
+    const hit = k === "all" ? ss : /^\d+$/.test(k) ? ss.filter((s) => String(s.n) === k) : ss.filter((s) => norm(teamName(s.team)) === k || norm(s.name) === k);
+    if (!hit.length) return m;
+    hit.forEach((s) => ids.add(s.id));
+    return sp;
+  }).trim();
+  return { ids: [...ids], body };
+}
+const cmdBox = $("cmd");
+const growCmd = () => { cmdBox.style.height = "auto"; cmdBox.style.height = Math.min(128, cmdBox.scrollHeight) + "px"; };
+cmdBox.addEventListener("input", growCmd);
+cmdBox.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("cmdbar").requestSubmit(); } if (e.key === "Escape") cmdBox.blur(); });
+$("cmdbar").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const { ids, body } = resolveTargets(cmdBox.value);
+  if (!body) return toast("Write a message to send.", true);
+  if (!ids.length) return toast("Pick sessions above, or write @3, @team or @all.", true);
+  $("cmdgo").disabled = true;
+  try {
+    const r = await api("POST", "/api/send", { ids, text: body });
+    toast(`Sent to ${r.sent} ${r.sent === 1 ? "session" : "sessions"}.`);
+    cmdBox.value = ""; growCmd();
+  } catch (err) { toast(`Couldn't send: ${err.message}`, true); }
+  $("cmdgo").disabled = false;
+});
+addEventListener("keydown", (e) => {   // Ctrl+K: 명령 막대로 (터미널 안에서는 터미널에 맡긴다)
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k" && !e.target.closest?.(".term")) { e.preventDefault(); cmdBox.focus(); }
+});
+
+// ---- 나를 기다리는 세션으로: Alt+J를 누를 때마다 다음 대기 세션을 크게 연다 (터미널에 입력 중이어도) ----
+let lastState = null;
+function showTile(t) {
+  if (large === t) return t.term.focus();
+  // 이미 크게 연 창이 있으면 닫힘 처리가 끝난 뒤에 연다 (close 이벤트는 나중에 오므로)
+  if (termd.open) { termd.addEventListener("close", () => openLarge(t), { once: true }); termd.close(); } else openLarge(t);
+}
+function jumpWaiting(team) {
+  const w = liveSessions().filter((s) => s.state === "waiting" && (!team || (boxes.has(s.team) ? s.team : "main") === team)).sort((a, b) => a.n - b.n);
+  if (!w.length) return toast("No session is waiting for you.");
+  const t = tiles.get(w[(w.findIndex((s) => s.id === large?.id) + 1) % w.length].id);
+  if (t) showTile(t);
+}
+addEventListener("keydown", (e) => {
+  if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && e.code === "KeyJ") { e.preventDefault(); e.stopPropagation(); jumpWaiting(); }
+}, true);
+// 알림 권한은 처음 보드를 누를 때 한 번 묻는다 (브라우저는 사용자 동작 없이 묻지 못하게 한다)
+addEventListener("pointerdown", () => { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }, { once: true });
+
+// ---- 인수인계: 세션 칸의 화살표 버튼 → 받을 곳 고르기 → 인수인계서가 다 써지면 자동으로 넘어간다 ----
+let hoFrom = "";
+const hoSeen = new Map();
+function openHandoff(id) {
+  hoFrom = id;
+  const me = data.sessions.find((s) => s.id === id), others = liveSessions().filter((s) => s.id !== id);
+  $("hoto").innerHTML = `<option value="">A new session with the same setup</option>` + others.map((s) => `<option value="${esc(s.id)}">${esc(`${s.n} · ${s.name || "Session " + s.n}`)}</option>`).join("");
+  $("ho-title").textContent = `Hand off ${me?.name || "Session " + (me?.n ?? "")}`;
+  $("honote").value = ""; $("hoerr").textContent = "";
+  $("hod").showModal();
+}
+$("hocancel").onclick = () => $("hod").close();
+$("hof").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const r = await api("POST", "/api/handoff", { from: hoFrom, to: $("hoto").value || undefined, note: $("honote").value });
+    hoSeen.set(r.id, "writing");
+    $("hod").close();
+    toast("Asked the session to write a handoff brief. The next session gets it when it's ready.", false, 5000);
+    await load();
+  } catch (err) { $("hoerr").textContent = err.message; }
+});
+// ---- 반복: 세션 칸의 ↻ 버튼 ----
+let loSession = "";
+const loSeen = new Map();
+const loWhen = (l) => l.when === "every" ? `every ${l.every} min` : l.when === "match" ? `when "${l.match}" shows up` : "each time it goes quiet";
+function renderLoopList() {
+  const mine = (data.loops || []).filter((l) => l.session === loSession && l.status === "on");
+  $("lolist").innerHTML = mine.map((l) => `<div class="loitem"><span>${esc(loWhen(l))} · ${l.runs}/${l.max} runs${l.until ? ` · stops at "${esc(l.until)}"` : ""}</span><button type="button" data-stop="${esc(l.id)}">Stop</button></div>`).join("");
+}
+function openLoop(id) {
+  loSession = id; $("loerr").textContent = "";
+  const me = data.sessions.find((s) => s.id === id);
+  $("lo-title").textContent = `Loop ${me?.name || "Session " + (me?.n ?? "")}`;
+  renderLoopList(); syncLoopWhen();
+  $("lod").showModal();
+}
+const syncLoopWhen = () => { $("loevery").hidden = $("lowhen").value !== "every"; $("lomatch").hidden = $("lowhen").value !== "match"; };
+$("lowhen").addEventListener("change", syncLoopWhen);
+$("locancel").onclick = () => $("lod").close();
+$("lolist").addEventListener("click", async (e) => { const b = e.target.closest("[data-stop]"); if (!b) return; await fetch(`/api/loop?id=${encodeURIComponent(b.dataset.stop)}`, { method: "DELETE" }); await load(); renderLoopList(); });
+$("lof").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  try {
+    const r = await api("POST", "/api/loop", { session: loSession, when: f.when.value, every: f.every.value, match: f.match.value, text: f.text.value, until: f.until.value, max: f.max.value });
+    loSeen.set(r.id, "on");
+    $("lod").close(); toast("Loop started.");
+    await load();
+  } catch (err) { $("loerr").textContent = err.message; }
+});
+function noteLoops(list) {
+  for (const l of list || []) {
+    const was = loSeen.get(l.id); loSeen.set(l.id, l.status);
+    if (was === "on" && l.status !== "on") toast(l.status === "done" ? `Loop finished: ${l.why}.` : `Loop stopped: ${l.why}.`, false, 6000);
+  }
+}
+function noteHandoffs(list) {
+  for (const h of list || []) {
+    const was = hoSeen.get(h.id); hoSeen.set(h.id, h.status);
+    if (!was || was === h.status) continue;
+    const to = data.sessions.find((s) => s.id === h.to);
+    if (h.status === "delivered") toast(`Handoff delivered to ${to?.name || "Session " + (to?.n ?? "")}.`, false, 5000);
+    if (h.status === "failed") toast("A handoff stopped: the brief never appeared or a session closed.", true, 6000);
+  }
+}
+
 async function load() {
   let d;
   try { d = await (await fetch("/api")).json(); }
@@ -1446,6 +1754,9 @@ async function load() {
   updateTools();
   const live = d.sessions;
   teamList = d.teams && d.teams.length ? d.teams : teamList;
+  renderTargets();
+  noteHandoffs(d.handoffs);
+  noteLoops(d.loops);
   $("email").textContent = d.email;
   $("count").textContent = `${live.length} of ${d.max} sessions in all`;
   for (const el of document.querySelectorAll(".add")) el.disabled = live.length >= d.max;
@@ -1458,7 +1769,7 @@ async function load() {
     const t = tiles.get(s.id) ?? makeTile(s);
     const home = (boxes.get(s.team) || boxes.get("main")).tiles;
     t.team = s.team;
-    if (!t.focused && t.el.parentElement !== home) home.appendChild(t.el);          // 다른 팀으로 옮겨졌으면 그 상자로
+    if (!gridOn && !t.focused && t.el.parentElement !== home) home.appendChild(t.el);          // 다른 팀으로 옮겨졌으면 그 상자로
     t.name = s.name;
     if (t.nameEl.isConnected) t.nameEl.textContent = s.name || `Session ${s.n}`;   // 이름을 고치는 중이면 건드리지 않는다
     if (teamsChanged || !t.sel.options.length) t.sel.innerHTML = teamOptions();
@@ -1468,10 +1779,18 @@ async function load() {
     t.tk.textContent = `${s.tokens.toLocaleString()} tokens`;
     t.el.dataset.state = s.state || "idle";
     t.st.innerHTML = s.exited ? "ended" : `<b class="sb">${({ working: "Working", waiting: "Needs you", done: "Done" })[s.state] || "Ready"}</b> running <span data-start="${s.start}">${fmt(Date.now() - s.start)}</span> <i class="cur"></i>`;
+    { const lp = (d.loops || []).find((l) => l.session === s.id && l.status === "on"); if (lp && !s.exited) t.st.insertAdjacentHTML("beforeend", ` <span class="lp" title="Loop running">loop ${lp.runs}/${lp.max}</span>`); }
   }
   // 나를 기다리는 세션 수: 창 제목(작업 표시줄)과 팀 상자 머리줄, 팀 규칙 버튼 표시
   const waiting = live.filter((s) => s.state === "waiting");
   document.title = waiting.length ? `(${waiting.length}) 세션 보드` : "세션 보드";
+  // 새로 나를 기다리게 된 세션: 보드가 뒤에 있으면 윈도우 알림. 누르면 그 세션을 크게 연다
+  if (lastState && "Notification" in window && Notification.permission === "granted" && (document.hidden || !document.hasFocus()))
+    for (const s of waiting) if (lastState[s.id] !== "waiting") {
+      const n = new Notification(`${s.name || "Session " + s.n} needs you`, { body: teamName(s.team), tag: s.id });
+      n.onclick = () => { focus(); n.close(); const t = tiles.get(s.id); if (t) showTile(t); };
+    }
+  lastState = Object.fromEntries(live.map((s) => [s.id, s.state]));
   for (const [id, b] of boxes) {
     const w = waiting.filter((s) => (boxes.has(s.team) ? s.team : "main") === id).length;
     b.waitEl.textContent = w ? `${w} waiting` : "";
@@ -1485,8 +1804,9 @@ async function load() {
     b.countEl.textContent = `${mine.length}`;
     if (b.acctCount) b.acctCount.textContent = `${mine.length} ${mine.length === 1 ? "session" : "sessions"} in this team`;
     const order = mine.filter((s) => !tiles.get(s.id)?.focused).map((s) => s.id), now = [...b.tiles.children].map((e) => [...tiles].find(([, t]) => t.el === e)?.[0]);
-    if (order.join() !== now.join()) for (const sid of order) b.tiles.appendChild(tiles.get(sid).el);
+    if (!gridOn && order.join() !== now.join()) for (const sid of order) b.tiles.appendChild(tiles.get(sid).el);
   }
+  if (gridOn) placeGrid();
   for (const el of document.querySelectorAll(".aemail")) el.textContent = d.email;
   renderUsage(d.limits);
   queueWire();
@@ -1507,13 +1827,31 @@ form.addEventListener("beforetoggle", (e) => {
   form.elements.cwd.value = store.get("cwd") || data.defaultCwd || "";   // 마지막에 쓴 폴더, 처음이면 홈 폴더
   loadHistory();
   form.elements.sname.value = ""; form.elements.role.value = "";
-  const m = store.get("model"), ef = store.get("effort");
-  if (m !== null) form.elements.model.value = m;
-  if (ef) form.elements.effort.value = ef;
   form.elements.rc.checked = store.get("rc") === "1";
   form.elements.tool.value = ["claude", "codex", "gemini", "agy"].includes(store.get("tool")) ? store.get("tool") : "claude";
+  toolOpts();
   toolCheck();
 });
+// CLI마다 모델 추천 목록과 추론 강도 칸이 다르다. 마지막에 고른 값은 CLI마다 따로 기억한다
+const EFF_LABEL = { "": "Default", low: "Low", medium: "Med", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra" };
+const toolNow = () => (form.elements.mode.value === "resume" ? "claude" : form.elements.tool.value);
+const optKey = (k, tool) => (tool === "claude" ? k : `${k}:${tool}`);   // Claude는 예전에 기억한 값을 그대로 쓴다
+function toolOpts() {
+  const tool = toolNow(), t = data.tools?.[tool];
+  const efforts = tool === "claude" ? ["low", "medium", "high", "xhigh", "max"] : ["", ...(t?.efforts ?? [])];
+  // 모델은 CLI가 알려 준 표시 이름으로 보여 준다. 기억한 모델이 목록에서 사라졌으면 그 id로라도 남긴다
+  const list = [...(t?.models ?? [])], saved = store.get(optKey("model", tool)) ?? "";
+  if (saved && !list.some(([id]) => id === saved)) list.push([saved, saved]);
+  $("models").innerHTML = `<option value="">Default</option>` + list.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join("");
+  form.elements.model.value = saved;
+  $("effortf").hidden = efforts.length < 2;
+  const want = store.get(optKey("effort", tool)) ?? (tool === "claude" ? "high" : "");
+  $("efforts").innerHTML = efforts.map((e) => `<label><input type="radio" name="effort" value="${e}"${e === (efforts.includes(want) ? want : efforts[0]) ? " checked" : ""}>${EFF_LABEL[e] ?? esc(e)}</label>`).join("");
+}
+function saveOpts(tool) {
+  store.set(optKey("model", tool), form.elements.model.value.trim());
+  store.set(optKey("effort", tool), $("effortf").hidden ? "" : form.elements.effort.value);
+}
 // ---- 설치된 CLI: 서버가 30초마다 찾아 /api에 실어 준다. 미리 알려서 세션을 띄우다 실패하는 일을 막는다 ----
 function updateTools() {
   const t = data.tools || {}, all = Object.values(t);
@@ -1532,7 +1870,7 @@ function toolCheck() {
   $("toolwarn").textContent = miss ? `${t.label} isn't installed. Install it with ${t.install}, then try again.` : "";
   form.querySelector(".go").disabled = miss;
 }
-form.addEventListener("change", (e) => { if (e.target.name === "tool" || e.target.name === "mode") toolCheck(); });
+form.addEventListener("change", (e) => { if (e.target.name === "tool" || e.target.name === "mode") { toolOpts(); toolCheck(); } });
 // 지난 세션 목록 (이어가기)
 const ago = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 async function loadHistory() {
@@ -1552,8 +1890,8 @@ form.addEventListener("submit", async (e) => {
     const go = form.querySelector(".go");
     go.disabled = true; $("err").textContent = "";
     try {
-      await api("POST", "/api/resume", { id, team: boxes.has(newTeam) ? newTeam : "main", role: form.elements.role.value.trim(), model: form.elements.model.value, effort: form.elements.effort.value, rc: form.elements.rc.checked });
-      store.set("model", form.elements.model.value); store.set("effort", form.elements.effort.value); store.set("rc", form.elements.rc.checked ? "1" : "0");
+      await api("POST", "/api/resume", { id, team: boxes.has(newTeam) ? newTeam : "main", role: form.elements.role.value.trim(), model: form.elements.model.value.trim(), effort: form.elements.effort.value, rc: form.elements.rc.checked });
+      saveOpts("claude"); store.set("rc", form.elements.rc.checked ? "1" : "0");
       form.hidePopover();
       await load();
     } catch (err) { $("err").textContent = err.message; }
@@ -1561,12 +1899,12 @@ form.addEventListener("submit", async (e) => {
     return;
   }
   const body = { name: form.elements.sname.value.trim(), role: form.elements.role.value.trim(), team: boxes.has(newTeam) ? newTeam : "main",
-    model: form.elements.model.value, effort: form.elements.effort.value, cwd: form.elements.cwd.value.trim(), rc: form.elements.rc.checked, tool: form.elements.tool.value };
+    model: form.elements.model.value.trim(), effort: $("effortf").hidden ? "" : form.elements.effort.value, cwd: form.elements.cwd.value.trim(), rc: form.elements.rc.checked, tool: form.elements.tool.value };
   const go = form.querySelector(".go");
   go.disabled = true; $("err").textContent = "";
   try {
     await api("POST", "/api/new", body);
-    store.set("model", body.model); store.set("effort", body.effort); store.set("rc", body.rc ? "1" : "0"); store.set("tool", body.tool); store.set("cwd", body.cwd);
+    saveOpts(body.tool); store.set("rc", body.rc ? "1" : "0"); store.set("tool", body.tool); store.set("cwd", body.cwd);
     form.hidePopover();
     await load();
   } catch (err) { $("err").textContent = err.message; }

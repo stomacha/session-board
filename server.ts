@@ -14,17 +14,27 @@ import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.SB_PORT) || 4777;   // 시험용 서버는 SB_PORT로 다른 포트에 띄운다
 const MAX = 16; // 세션 개수는 자유지만, 컴퓨터가 버틸 수 있게 안전 상한만 둔다
-const MODELS = ["opus", "sonnet", "haiku"];
-// 세션으로 띄울 수 있는 CLI. Codex·Gemini는 첫 판: 띄우고 쓰기만 (이어하기·상태 표시·팀 규칙·폰 조종은 Claude Code만)
-const TOOLS: Record<string, { label: string; install: string }> = {
-  claude: { label: "Claude Code", install: "the installer at https://claude.com/claude-code" },
-  codex: { label: "Codex", install: "npm install -g @openai/codex" },
-  gemini: { label: "Gemini CLI", install: "npm install -g @google/gemini-cli" },
-  agy: { label: "Antigravity", install: "the Antigravity CLI (agy) installer from Google" },
-};
+// 모델 이름은 CLI마다 달라 목록 대신 모양만 본다. cmd.exe로 넘어가는 CLI도 있어 특수문자(& | ^ % " 공백)는 막는다
+const MODEL_RE = /^[\w.\-\[\]]{0,64}$/;
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+// 세션으로 띄울 수 있는 CLI. 다른 CLI는 띄우고 쓰기만 (이어하기·상태 표시·팀 규칙·폰 조종은 Claude Code만)
+// efforts: 고를 수 있는 추론 강도 (빈 목록이면 그 CLI엔 추론 강도 옵션이 없음), args: 고른 모델·강도를 그 CLI의 플래그로
+const TOOLS: Record<string, { label: string; install: string; efforts: string[]; args: (m: string, e: string) => string[] }> = {
+  claude: { label: "Claude Code", install: "the installer at https://claude.com/claude-code", efforts: EFFORTS, args: () => [] },
+  codex: { label: "Codex", install: "npm install -g @openai/codex", efforts: [...EFFORTS, "ultra"],
+    args: (m, e) => [...(m ? ["-m", m] : []), ...(e ? ["-c", `model_reasoning_effort=${e}`] : [])] },
+  gemini: { label: "Gemini CLI", install: "npm install -g @google/gemini-cli", efforts: [], args: (m) => (m ? ["-m", m] : []) },
+  agy: { label: "Antigravity", install: "the Antigravity CLI (agy) installer from Google", efforts: EFFORTS,
+    args: (m, e) => [...(m ? ["--model", m] : []), ...(e ? ["--effort", e] : [])] },
+};
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
 const CLAUDE = join(homedir(), ".claude");
+
+// 여러 세션에 보낼 글: 줄바꿈은 살리고 나머지 제어 문자(ESC 포함)는 지워서, 글로 터미널 명령을 끼워 넣지 못하게 한다
+export function cleanSend(text: unknown): string {
+  if (typeof text !== "string") return "";
+  return text.replace(/\r\n?/g, "\n").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "").slice(0, 8000).trim();
+}
 
 export function fmtDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -290,7 +300,8 @@ type Live = {
   id: string; n: number; model: string; effort: string; cwd: string; start: number;
   name: string; team: string; role: string;   // 사용자가 붙인 이름(비면 "Session N"), 속한 팀, 팀 안에서 맡은 일
   tool: string;                                // claude / codex / gemini
-  term: any; buf: string; exited: boolean; sockets: Set<any>;
+  term: any; chunks: string[]; bufLen: number; pending: string; flushT: any; exited: boolean; sockets: Set<any>;
+  lastOut: number;                             // 마지막 출력 시각: 화면이 조용해지면 입력을 받을 준비가 된 것
 };
 
 // ---- 팀: 세션을 묶는 상자. teams.json에 저장해 서버를 다시 켜도 남는다 ----
@@ -309,6 +320,16 @@ try {
 // 쓰다가 꺼져도 teams.json이 반쯤 쓰인 채로 남지 않게 임시 파일에 쓰고 바꿔 끼운다
 const saveTeams = () => { writeFileSync(`${TEAMS_FILE}.tmp`, JSON.stringify(teams, null, 2)); renameSync(`${TEAMS_FILE}.tmp`, TEAMS_FILE); };
 const teamOk = (id: unknown) => typeof id === "string" && teams.some((t) => t.id === id);
+// ---- 프리셋: 팀 구성(이름·규칙·세션마다 도구·모델·추론 강도·폴더·이름·역할)을 저장해 두고 한 번에 다시 띄운다 ----
+type PresetSession = { tool: string; model: string; effort: string; cwd: string; name: string; role: string };
+type Preset = { id: string; name: string; rules: string; sessions: PresetSession[] };
+const PRESETS_FILE = join(DATA_DIR, "presets.json");
+let presets: Preset[] = [];
+try {
+  const p = JSON.parse(readFileSync(PRESETS_FILE, "utf8"));
+  if (Array.isArray(p)) presets = p.filter((x) => typeof x?.id === "string" && typeof x?.name === "string" && Array.isArray(x?.sessions));
+} catch {}
+const savePresets = () => { writeFileSync(`${PRESETS_FILE}.tmp`, JSON.stringify(presets, null, 2)); renameSync(`${PRESETS_FILE}.tmp`, PRESETS_FILE); };
 // 이름: 글자만 남기고 앞뒤 공백 제거, 40자까지
 export const cleanName = (v: unknown, max = 40) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, max) : "");
 // 팀 규칙은 여러 줄을 받되 줄바꿈만 남기고 다른 제어 문자는 뺀다
@@ -334,10 +355,22 @@ async function refreshTools() {
   haveAt = Date.now();
   const found = await Promise.all(Object.keys(TOOLS).map(async (t) => [t, !!((await whereIs(`${t}.exe`)) || (await whereIs(`${t}.cmd`)))] as const));
   have = Object.fromEntries(found);
+  // 모델 목록 [id, 보여 줄 이름]: Codex는 자기 캐시 파일, Gemini·Antigravity는 목록 명령을 처음 한 번만 (agy는 인터넷으로 받아 옴)
+  try { models.codex = JSON.parse(readFileSync(join(homedir(), ".codex", "models_cache.json"), "utf8")).models.filter((x: any) => x.visibility !== "hide").map((x: any) => [x.slug, x.display_name || pretty(x.slug)]); } catch {}
+  const list = async (t: string, a: string[], re: RegExp) => {
+    if (models[t] || !have[t]) return;
+    models[t] = [];   // 실패해도 다시 묻지 않는다
+    try { models[t] = [...(await run("cmd.exe", ["/d", "/c", t, ...a], { timeout: 30_000 })).stdout.matchAll(re)].map((x) => [x[1], x[2] === x[1] ? pretty(x[1]) : x[2]]); } catch {}
+  };
+  list("gemini", ["--list-models"], /^([\w.\-]+) \((.+)\)\s*$/gm);   // "gemini-2.5-pro (gemini-2.5-pro)"처럼 이름이 id 그대로면 다듬는다
+  list("agy", ["models"], /^([\w.\-]+)\t(.+?)\s*$/gm);
 }
+// "gemini-3.1-flash-lite" → "Gemini 3.1 Flash Lite"
+export const pretty = (id: string) => id.split("-").map((w) => (w === "gpt" ? "GPT" : w[0].toUpperCase() + w.slice(1))).join(" ");
+const models: Record<string, [string, string][]> = { claude: [["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"]] };
 function toolInfo() {   // installed: 아직 찾는 중이면 비어 있다
   if (Date.now() - haveAt > 30_000) refreshTools();
-  return Object.fromEntries(Object.entries(TOOLS).map(([k, v]) => [k, { ...v, installed: have[k] }]));
+  return Object.fromEntries(Object.entries(TOOLS).map(([k, v]) => [k, { label: v.label, install: v.install, efforts: v.efforts, models: models[k] ?? [], installed: have[k] }]));
 }
 refreshTools();
 
@@ -361,20 +394,88 @@ function startSession(model: string, effort: string, cwd: string, name = "", tea
   let file = claudeExe, argv = args;
   if (tool !== "claude") {
     // .exe(agy 등)는 바로 띄우고, npm으로 깐 CLI(.cmd)는 cmd로 감싸 띄운다 (node-pty는 .cmd를 바로 못 띄움)
-    const exe = whereSync(`${tool}.exe`);
-    if (exe) argv = [];
-    else if (whereSync(`${tool}.cmd`)) argv = ["/d", "/c", `${tool}.cmd`];
+    const exe = whereSync(`${tool}.exe`), extra = TOOLS[tool].args(model, effort);
+    if (exe) argv = extra;
+    else if (whereSync(`${tool}.cmd`)) argv = ["/d", "/c", `${tool}.cmd`, ...extra];
     else throw new Error(`${TOOLS[tool].label} isn't installed. Install it with: ${TOOLS[tool].install}`);
     file = exe || "cmd.exe";
   }
   const term = pty.spawn(file, argv, { name: "xterm-256color", cols: 100, rows: 30, cwd, env });
-  const s: Live = { id, n, model, effort, cwd, start: Date.now(), name, team, role, tool, term, buf: "", exited: false, sockets: new Set() };
-  // ponytail: 화면 복원용 버퍼는 마지막 400KB만, 이스케이프 시퀀스 중간에서 잘릴 수 있음
-  term.onData((d: string) => { s.buf = (s.buf + d).slice(-400_000); for (const ws of s.sockets) ws.send(d); });
-  term.onExit(() => { s.exited = true; for (const ws of s.sockets) ws.send("\r\n[session ended]\r\n"); });
+  const s: Live = { id, n, model, effort, cwd, start: Date.now(), name, team, role, tool, term, chunks: [], bufLen: 0, pending: "", flushT: null, exited: false, sockets: new Set(), lastOut: Date.now() };
+  // 출력은 조각째 쌓고(매번 큰 문자열을 복사하지 않게) 16ms마다 한 번에 보낸다. 세션이 많아도 서버가 막히지 않게
+  // ponytail: 화면 복원용 버퍼는 마지막 약 400KB를 조각 단위로, 이스케이프 시퀀스 중간에서 잘릴 수 있음
+  const flush = () => { s.flushT = null; const out = s.pending; s.pending = ""; if (out) for (const ws of s.sockets) ws.send(out); };
+  term.onData((d: string) => {
+    s.chunks.push(d); s.bufLen += d.length; s.lastOut = Date.now();
+    for (const l of loops.values()) if (l.session === s.id && l.status === "on") l.tail = (l.tail + plainText(d)).slice(-4000);
+    while (s.bufLen > 400_000 && s.chunks.length > 1) s.bufLen -= s.chunks.shift()!.length;
+    s.pending += d;
+    if (!s.flushT) s.flushT = setTimeout(flush, 16);
+  });
+  term.onExit(() => { s.exited = true; clearTimeout(s.flushT); flush(); for (const ws of s.sockets) ws.send("\r\n[session ended]\r\n"); });
   live.set(id, s);
   return s;
 }
+
+// 붙여넣기(bracketed paste)로 넣고, TUI가 다 받은 뒤 Enter
+function sendText(s: Live, text: string) {
+  s.term.write(`\x1b[200~${text}\x1b[201~`);
+  setTimeout(() => { if (!s.exited) s.term.write("\r"); }, 150);
+}
+
+// ---- 인수인계(handoff): 넘기는 세션이 직접 인수인계서를 쓰고, 다 쓰면 받는 세션에 "읽고 이어서 해"를 보낸다 ----
+// 작업을 가장 잘 아는 건 그 세션 자신이라 요약을 따로 만들지 않는다. 어떤 CLI든 같은 방식으로 된다
+type Handoff = { id: string; from: string; to: string; path: string; note: string; status: "writing" | "delivering" | "delivered" | "failed"; at: number; size: number; still: number };
+const handoffs = new Map<string, Handoff>();
+export const briefPrompt = (rel: string) =>
+  `Hand this work over to another agent who will continue it. Write a handoff brief to the file ${rel} (create the folder if needed). ` +
+  `Include: the goal, what is done (with file paths), what is not done yet, decisions and why, known problems, and the exact next steps. ` +
+  `Keep it under 60 lines and write it in the language we have been using. Do not do any other work. When the file is written, say HANDOFF READY.`;
+export const receivePrompt = (path: string, note: string) =>
+  `You are taking over work from another session. First read the handoff brief at ${path}, then continue with its next steps.` + (note ? ` Extra instruction from the user: ${note}` : "");
+function stampName() { const d = new Date(), p = (n: number) => String(n).padStart(2, "0"); return `handoff-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.md`; }
+setInterval(() => {
+  for (const h of handoffs.values()) {
+    if (h.status === "writing") {
+      if (Date.now() - h.at > 15 * 60_000 || !live.get(h.from) || live.get(h.from)!.exited) { h.status = "failed"; continue; }
+      let size = 0; try { size = statSync(h.path).size; } catch {}
+      if (size > 0 && size === h.size) h.still++; else h.still = 0;
+      h.size = size;
+      if (h.still >= 2) h.status = "delivering";   // 2초 동안 크기가 그대로면 다 쓴 것으로 본다
+    }
+    if (h.status === "delivering") {
+      const t = live.get(h.to);
+      if (!t || t.exited) { h.status = "failed"; continue; }
+      // 받는 세션이 막 켜졌으면 화면이 자리 잡을 때까지(출력이 1.5초 조용해질 때까지) 기다린다
+      if (Date.now() - t.start > 4000 && Date.now() - t.lastOut > 1500) { sendText(t, receivePrompt(h.path, h.note)); h.status = "delivered"; }
+    }
+  }
+}, 1000).unref();
+
+// ---- 반복(loop): 쉴 때 / N분마다 / 화면에 어떤 글자가 나오면 지시문을 보낸다. 목표 글자가 나오거나 횟수를 다 채우면 멈춘다 ----
+type Loop = { id: string; session: string; when: "idle" | "every" | "match"; every: number; match: string; text: string; until: string; max: number;
+  runs: number; lastFire: number; tail: string; status: "on" | "done" | "stopped"; why: string };
+const loops = new Map<string, Loop>();
+export const plainText = (x: string) => x.replace(/\x1b\[[0-9;?<>=]*[ -\/]*[@-~]/g, "").replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "").replace(/\x1b./g, "");
+export const seen = (tail: string, needle: string) => !!needle && tail.toLowerCase().includes(needle.toLowerCase());
+setInterval(() => {
+  const now = Date.now();
+  for (const l of loops.values()) {
+    if (l.status !== "on") continue;
+    const s = live.get(l.session);
+    if (!s || s.exited) { l.status = "stopped"; l.why = "the session closed"; continue; }
+    if (seen(l.tail, l.until)) { l.status = "done"; l.why = `"${l.until}" appeared`; continue; }
+    if (l.runs >= l.max) { l.status = "stopped"; l.why = `ran ${l.max} times`; continue; }
+    let fire = false;
+    if (l.when === "every") fire = now - l.lastFire >= l.every * 60_000;
+    else if (l.when === "match") fire = seen(l.tail, l.match) && now - l.lastFire > 10_000;
+    else {   // idle: Claude Code는 훅이 알려 주는 "끝남", 다른 CLI는 20초 동안 출력이 없으면. 보낸 뒤 새 출력이 있어야 다시 보낸다
+      const idle = s.tool === "claude" ? sessionState(s.id) === "done" : now - s.lastOut > 20_000;
+      fire = idle && s.lastOut > l.lastFire + 2000 && now - l.lastFire > 15_000;
+    }
+    if (fire) { sendText(s, l.text); l.runs++; l.lastFire = now; l.tail = ""; }
+  }
+}, 1000).unref();
 
 function stopSession(id: string) {
   const s = live.get(id);
@@ -413,16 +514,78 @@ const server = createServer(async (req, res) => {
       id: s.id, n: s.n, name: s.name, team: teamOk(s.team) ? s.team : MAIN, role: s.role, tool: s.tool, model: s.model || "default", effort: s.effort, cwd: s.cwd, start: s.start, exited: s.exited, tokens: tokensOf(s.id),
       state: s.exited ? "ended" : sessionState(s.id),
     }));
-    return json(res, 200, { email: email(), max: MAX, home: homedir(), defaultCwd: homedir(), limits: limits(), teams, sessions, tools: toolInfo() });
+    return json(res, 200, { email: email(), max: MAX, home: homedir(), defaultCwd: homedir(), limits: limits(), teams, sessions, tools: toolInfo(),
+      presets: presets.map((p) => ({ id: p.id, name: p.name, count: p.sessions.length })),
+      handoffs: [...handoffs.values()].slice(-10).map((h) => ({ id: h.id, from: h.from, to: h.to, status: h.status })),
+      loops: [...loops.values()].slice(-30).map(({ tail, lastFire, ...l }) => l) });
+  }
+  // 인수인계: from 세션이 인수인계서를 쓰고, to 세션(없으면 같은 설정의 새 세션)이 받아서 이어 간다
+  if (req.method === "POST" && url.pathname === "/api/handoff") {
+    if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req), s = b && live.get(b.from);
+    if (!s || s.exited) return json(res, 400, { error: "That session isn't running." });
+    let t = b.to ? live.get(b.to) : undefined;
+    if (b.to && (!t || t.exited || t.id === s.id)) return json(res, 400, { error: "Pick a different running session to receive the work." });
+    const dir = join(s.cwd, ".cerebro");
+    try { mkdirSync(dir, { recursive: true }); if (!existsSync(join(dir, ".gitignore"))) writeFileSync(join(dir, ".gitignore"), "*\n"); }   // git이 이 폴더를 무시하게
+    catch (e: any) { return json(res, 500, { error: `Can't write in ${s.cwd}: ${e?.message ?? e}` }); }
+    if (!t) {
+      if (live.size >= MAX) return json(res, 409, { error: `at most ${MAX} sessions` });
+      try { t = startSession(s.model === "default" ? "" : s.model, s.effort, s.cwd, cleanName(`${s.name || `Session ${s.n}`} 2`), s.team, "", s.role, false, s.tool); }
+      catch (e: any) { return json(res, 500, { error: String(e?.message ?? e) }); }
+    }
+    const name = stampName(), path = join(dir, name);
+    sendText(s, briefPrompt(`.cerebro/${name}`));
+    const h: Handoff = { id: randomUUID(), from: s.id, to: t.id, path, note: cleanSend(b.note).slice(0, 1000), status: "writing", at: Date.now(), size: 0, still: 0 };
+    handoffs.set(h.id, h);
+    return json(res, 200, { id: h.id, to: t.id });
+  }
+  // 반복 만들기 / 끄기
+  if (req.method === "POST" && url.pathname === "/api/loop") {
+    if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req), s = b && live.get(b.session), text = cleanSend(b?.text), until = cleanSend(b?.until).slice(0, 200), match = cleanSend(b?.match).slice(0, 200);
+    if (!s || s.exited) return json(res, 400, { error: "That session isn't running." });
+    if (!["idle", "every", "match"].includes(b.when)) return json(res, 400, { error: "Pick when the loop runs." });
+    if (!text) return json(res, 400, { error: "Write what to send each time." });
+    const every = Math.round(Number(b.every)), max = Math.round(Number(b.max ?? 10));
+    if (b.when === "every" && !(every >= 1 && every <= 1440)) return json(res, 400, { error: "Every 1 to 1440 minutes." });
+    if (b.when === "match" && !match) return json(res, 400, { error: "Write the text to watch for." });
+    if (!(max >= 1 && max <= 100)) return json(res, 400, { error: "Run it 1 to 100 times." });
+    // 보낸 글이 화면에 그대로 찍히므로, 그 안에 든 글자로는 멈추거나 다시 시작할 수 없다
+    if (seen(text, until) || seen(text, match)) return json(res, 400, { error: "The stop or watch text can't appear inside the message itself." });
+    const l: Loop = { id: randomUUID(), session: s.id, when: b.when, every, match, text, until, max, runs: 0, lastFire: b.when === "every" ? Date.now() : 0, tail: "", status: "on", why: "" };
+    loops.set(l.id, l);
+    return json(res, 200, { id: l.id });
+  }
+  if (req.method === "DELETE" && url.pathname === "/api/loop") {
+    if (!originOk(req)) return json(res, 403, { error: "forbidden" });
+    const l = loops.get(url.searchParams.get("id") ?? "");
+    if (l && l.status === "on") { l.status = "stopped"; l.why = "you stopped it"; }
+    return json(res, 200, {});
+  }
+  // 한 번 입력으로 여러 세션에 지시: 붙여넣기(bracketed paste)로 넣고 Enter. 여러 줄이어도 중간에 제출되지 않는다
+  if (req.method === "POST" && url.pathname === "/api/send") {
+    if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req), text = cleanSend(b?.text);
+    if (!b || !Array.isArray(b.ids) || !text) return json(res, 400, { error: "Pick at least one session and write a message." });
+    let sent = 0;
+    for (const id of new Set(b.ids as string[])) {
+      const s = live.get(id);
+      if (!s || s.exited) continue;
+      sendText(s, text);
+      sent++;
+    }
+    return json(res, 200, { sent });
   }
   if (req.method === "POST" && url.pathname === "/api/new") {
     if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
     const b = await readBody(req);
-    if (!b || !MODELS.concat("").includes(b.model ?? "") || !EFFORTS.includes(b.effort)) return json(res, 400, { error: "model or effort is invalid" });
+    const tool = b && Object.hasOwn(TOOLS, b.tool) ? b.tool : "claude";
+    // Claude Code는 추론 강도가 꼭 있어야 하고, 다른 CLI는 비워 두면 그 CLI의 기본값
+    if (!b || !MODEL_RE.test(b.model ?? "") || !(tool === "claude" ? EFFORTS : ["", ...TOOLS[tool].efforts]).includes(b.effort)) return json(res, 400, { error: "model or effort is invalid" });
     if (typeof b.cwd !== "string" || !existsSync(b.cwd) || !statSync(b.cwd).isDirectory()) return json(res, 400, { error: "folder does not exist" });
     if (live.size >= MAX) return json(res, 409, { error: `at most ${MAX} sessions` });
-    const tool = Object.hasOwn(TOOLS, b.tool) ? b.tool : "claude";
-    try { return json(res, 200, { id: startSession(tool === "claude" ? b.model ?? "" : "", b.effort, b.cwd, cleanName(b.name), teamOk(b.team) ? b.team : MAIN, "", cleanName(b.role, 60), tool === "claude" && b.rc === true, tool).id }); }
+    try { return json(res, 200, { id: startSession(b.model ?? "", b.effort, b.cwd, cleanName(b.name), teamOk(b.team) ? b.team : MAIN, "", cleanName(b.role, 60), tool === "claude" && b.rc === true, tool).id }); }
     catch (e: any) { return json(res, 500, { error: String(e?.message ?? e) }); }
   }
   if (req.method === "DELETE" && url.pathname === "/api/session") {
@@ -443,7 +606,7 @@ const server = createServer(async (req, res) => {
     if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
     const b = await readBody(req);
     if (!b || typeof b.id !== "string" || !/^[0-9a-f-]{36}$/i.test(b.id)) return json(res, 400, { error: "Pick a session to resume." });
-    if (!MODELS.concat("").includes(b.model ?? "") || !EFFORTS.includes(b.effort)) return json(res, 400, { error: "model or effort is invalid" });
+    if (!MODEL_RE.test(b.model ?? "") || !EFFORTS.includes(b.effort)) return json(res, 400, { error: "model or effort is invalid" });
     if (live.has(b.id)) return json(res, 409, { error: "That session is already open on the board." });
     if (live.size >= MAX) return json(res, 409, { error: `at most ${MAX} sessions` });
     const f = sessionFiles().find((x) => x.id === b.id), info = f && pastInfo(f.path);
@@ -483,6 +646,45 @@ const server = createServer(async (req, res) => {
     if (!s) return json(res, 404, { error: "session not found" });
     if ("name" in b) s.name = cleanName(b.name);
     if ("team" in b) { if (!teamOk(b.team)) return json(res, 400, { error: "team not found" }); s.team = b.team; }
+    return json(res, 200, {});
+  }
+  // 프리셋 저장: 팀의 지금 구성을 그대로 적어 둔다. 같은 이름의 프리셋이 있으면 덮어쓴다
+  if (req.method === "POST" && url.pathname === "/api/preset") {
+    if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req), t = teams.find((x) => x.id === b?.team);
+    if (!t) return json(res, 404, { error: "team not found" });
+    const sessions = [...live.values()].filter((s) => !s.exited && (teamOk(s.team) ? s.team : MAIN) === t.id).sort((x, y) => x.n - y.n)
+      .map((s) => ({ tool: s.tool, model: s.model, effort: s.effort, cwd: s.cwd, name: s.name, role: s.role }));
+    if (!sessions.length) return json(res, 400, { error: "This team has no running sessions to save." });
+    const old = presets.find((p) => p.name === t.name);
+    if (!old && presets.length >= 20) return json(res, 409, { error: "at most 20 presets" });
+    const p: Preset = { id: old?.id ?? randomUUID().slice(0, 8), name: t.name, rules: t.rules ?? "", sessions };
+    presets = presets.filter((x) => x !== old).concat(p); savePresets();
+    return json(res, 200, { id: p.id, count: sessions.length });
+  }
+  // 프리셋 띄우기: 같은 이름·규칙의 새 팀을 만들고 세션을 한꺼번에 띄운다. 폴더가 없어졌거나 상한에 걸린 세션은 건너뛰고 알려 준다
+  if (req.method === "POST" && url.pathname === "/api/preset/launch") {
+    if (!originOk(req) || req.headers["content-type"] !== "application/json") return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req), p = presets.find((x) => x.id === b?.id);
+    if (!p) return json(res, 404, { error: "preset not found" });
+    if (teams.length >= 12) return json(res, 409, { error: "at most 12 teams" });
+    const rules = cleanRules(p.rules), t: Team = { id: randomUUID().slice(0, 8), name: cleanName(p.name) || "Preset", ...(rules ? { rules } : {}) };
+    teams.push(t); saveTeams();
+    let started = 0;
+    const skipped: string[] = [];
+    for (const x of p.sessions) {
+      const tool = Object.hasOwn(TOOLS, x?.tool) ? x.tool : "claude", label = cleanName(x?.name) || cleanName(x?.role) || TOOLS[tool].label;
+      if (live.size >= MAX) { skipped.push(`${label}: at most ${MAX} sessions`); continue; }
+      if (!MODEL_RE.test(x.model ?? "") || !(tool === "claude" ? EFFORTS : ["", ...TOOLS[tool].efforts]).includes(x.effort)) { skipped.push(`${label}: model or effort is invalid`); continue; }
+      if (typeof x.cwd !== "string" || !existsSync(x.cwd) || !statSync(x.cwd).isDirectory()) { skipped.push(`${label}: folder is gone`); continue; }
+      try { startSession(x.model ?? "", x.effort, x.cwd, cleanName(x.name), t.id, "", cleanName(x.role, 60), false, tool); started++; }
+      catch (e: any) { skipped.push(`${label}: ${e?.message ?? e}`); }
+    }
+    return json(res, 200, { team: t.id, started, skipped });
+  }
+  if (req.method === "DELETE" && url.pathname === "/api/preset") {
+    if (!originOk(req)) return json(res, 403, { error: "forbidden" });
+    presets = presets.filter((p) => p.id !== url.searchParams.get("id")); savePresets();
     return json(res, 200, {});
   }
   // 팀 만들기: 이름 + 처음에 넣을 세션들
@@ -539,8 +741,10 @@ server.on("upgrade", (req, socket, head) => {
   const s = live.get(new URL(req.url ?? "/", "http://x").searchParams.get("id") ?? "");
   if (!originOk(req) || !s) return void socket.destroy();
   wss.handleUpgrade(req, socket, head, (ws) => {
+    // 아직 안 보낸 출력은 기존 화면에 먼저 보내고 비운다. 새 화면은 쌓인 조각 전체로 복원하므로 같은 출력이 두 번 오지 않는다
+    if (s.flushT) { clearTimeout(s.flushT); s.flushT = null; const out = s.pending; s.pending = ""; for (const o of s.sockets) o.send(out); }
     s.sockets.add(ws);
-    if (s.buf) ws.send(s.buf);
+    if (s.chunks.length) ws.send(s.chunks.join(""));
     ws.on("close", () => s.sockets.delete(ws));
     ws.on("message", (raw) => {
       let m: any;
@@ -555,11 +759,13 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 const killAll = () => { for (const s of live.values()) if (!s.exited) try { s.term.kill(); } catch {} };
-process.on("exit", killAll);
+// 서버가 죽은 시각과 이유를 server.log에 남긴다 (start.bat이 출력을 그리로 보낸다)
+const stamp = () => new Date().toISOString();
+process.on("exit", (code) => { console.error(stamp(), `exit code ${code}, ${live.size} sessions, heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB`); killAll(); });
 process.on("SIGINT", () => process.exit());
 // 세션 하나의 오류(터미널 종료 중 쓰기 등)로 서버 전체가 죽지 않게 한다
-process.on("uncaughtException", (e) => console.error("uncaught:", e));
-process.on("unhandledRejection", (e) => console.error("unhandled:", e));
+process.on("uncaughtException", (e) => console.error(stamp(), "uncaught:", e));
+process.on("unhandledRejection", (e) => console.error(stamp(), "unhandled:", e));
 
 if (process.argv[1]?.endsWith("server.ts")) {
   server.listen(PORT, "127.0.0.1", () => console.log(`http://127.0.0.1:${PORT}`));
@@ -568,6 +774,10 @@ if (process.argv[1]?.endsWith("server.ts")) {
 // 자체 확인: node server.ts --check
 if (process.argv.includes("--check")) {
   console.assert(fmtDuration(3723000) === "1h 2m 3s", "fmtDuration");
+  console.assert(plainText("\x1b[31mALL \x1b[1mTESTS\x1b[0m PASS\x1b]0;title\x07") === "ALL TESTS PASS" && seen("x all tests pass y", "ALL TESTS PASS") && !seen("abc", ""), "loop text matching ignores colors and case");
+  console.assert(briefPrompt(".cerebro/x.md").includes(".cerebro/x.md") && receivePrompt("p.md", "").endsWith("next steps.") && receivePrompt("p.md", "go").includes("go"), "handoff prompts carry the path and the note");
+  console.assert(cleanSend("  fix it\r\nthen test\x1b[2J\x07 ") === "fix it\nthen test[2J" && cleanSend(42) === "", "cleanSend keeps lines, strips control chars");
+  console.assert(pretty("gemini-3.1-flash-lite") === "Gemini 3.1 Flash Lite" && pretty("gpt-oss") === "GPT Oss", "pretty model names");
   console.assert(cleanName("  팀\u0007 A  ") === "팀 A", "cleanName trims and strips control chars");
   console.assert(cleanName("x".repeat(60)).length === 40, "cleanName caps length");
   console.assert(cleanName(42) === "", "cleanName rejects non-strings");
